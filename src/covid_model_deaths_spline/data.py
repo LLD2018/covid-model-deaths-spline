@@ -61,7 +61,7 @@ def load_aggregate_locations(inputs_root: Path) -> pd.DataFrame:
     return hierarchy.loc[aggregate & not_global, keep_columns].sort_values('sort_order').reset_index(drop=True)
 
 
-def load_full_data(inputs_root: Path) -> pd.DataFrame:
+def load_full_data(inputs_root: Path, drop_pseudo: bool) -> pd.DataFrame:
     """Gets all death, case, and population data."""
     full_data_path = inputs_root / 'use_at_your_own_risk' / 'full_data_extra_hospital.csv'
     data = pd.read_csv(full_data_path)
@@ -71,6 +71,11 @@ def load_full_data(inputs_root: Path) -> pd.DataFrame:
     keep_columns = ['location_id', 'Date', 'Deaths', 'Confirmed', 'Hospitalizations', 'Death rate', 'population']
     sort_columns = ['location_id', 'Date']
     data = data.loc[:, keep_columns].sort_values(sort_columns).reset_index(drop=True)
+    
+    if drop_pseudo:
+        data['Confirmed'] = np.nan
+        data['Hospitalizations'] = np.nan
+        
     return data
 
 
@@ -85,10 +90,11 @@ def get_shifted_data(full_data: pd.DataFrame, count_var: str, rate_var: str, shi
     has_data = data.groupby('location_id')[rate_var].transform(max).astype(bool)
     keep_columns = ['location_id', 'True date', 'Date', rate_var]
     data = data.loc[non_na & has_data, keep_columns].reset_index(drop=True)
-
-    data = (data.groupby('location_id', as_index=False)
-            .apply(lambda x: fill_dates(x, rate_var))
-            .reset_index(drop=True))
+    
+    if not data.empty:
+        data = (data.groupby('location_id', as_index=False)
+                .apply(lambda x: fill_dates(x, rate_var))
+                .reset_index(drop=True))
 
     return data
 
@@ -119,10 +125,11 @@ def get_population_data(input_root: Path, hierarchy: pd.DataFrame) -> pd.DataFra
 def holdout_days(df: pd.DataFrame, n_holdout_days: int) -> pd.DataFrame:
     """Drop some number of holdout days from the data."""
     df = df.copy()
-    df['last_date'] = df.groupby('location_id')['Date'].transform(max)
-    keep_idx = df.apply(lambda x: x['Date'] <= x['last_date'] - pd.Timedelta(days=n_holdout_days), axis=1)
-    df = df.loc[keep_idx].reset_index(drop=True)
-    del df['last_date']
+    if not df.empty:
+        df['last_date'] = df.groupby('location_id')['Date'].transform(max)
+        keep_idx = df.apply(lambda x: x['Date'] <= x['last_date'] - pd.Timedelta(days=n_holdout_days), axis=1)
+        df = df.loc[keep_idx].reset_index(drop=True)
+        del df['last_date']
 
     return df
 

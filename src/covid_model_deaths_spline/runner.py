@@ -13,7 +13,7 @@ warnings.simplefilter('ignore')
 
 
 def make_deaths(app_metadata: cli_tools.Metadata, input_root: Path, output_root: Path,
-                holdout_days: int, n_draws: int):
+                holdout_days: int, n_draws: int, drop_pseudo: bool):
     logger.debug("Setting up output directories.")
     model_dir = output_root / 'models'
     spline_settings_dir = output_root / 'spline_settings'
@@ -27,7 +27,7 @@ def make_deaths(app_metadata: cli_tools.Metadata, input_root: Path, output_root:
     hierarchy = hierarchy.loc[~hierarchy['location_id'].isin([60892, 60893, 7])]
     agg_hierarchy = data.load_aggregate_locations(input_root)
 
-    full_data = data.load_full_data(input_root)
+    full_data = data.load_full_data(input_root, drop_pseudo)
     full_data, manipulation_metadata = data.evil_doings(full_data)
     app_metadata.update({'data_manipulation': manipulation_metadata})
 
