@@ -234,8 +234,8 @@ def calc_change(data: pd.DataFrame, plot_cols: List[str]) -> pd.DataFrame:
     last_week = data['Date'].astype(str).values[-7] + ' to ' + data['Date'].astype(str).values[-1]
     location_name = data['location_name'].unique().item()
 
-    prior_week_data = data.iloc[-14:-7][plot_cols].fillna(0).sum()
-    last_week_data = data.iloc[-7:][plot_cols].fillna(0).sum()
+    prior_week_data = data.iloc[-14:-7][plot_cols].sum()  # skipna=False
+    last_week_data = data.iloc[-7:][plot_cols].sum()  # skipna=False
     chng_data = ((last_week_data - prior_week_data) / prior_week_data) * 100
     chng_data = chng_data.replace([np.inf, -np.inf], np.nan)
     chng_data = chng_data.fillna(0)

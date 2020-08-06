@@ -10,10 +10,17 @@ import numpy as np
 def evil_doings(full_data: pd.DataFrame) -> Tuple[pd.DataFrame, Dict]:
     manipulation_metadata = {}
     madagascar = full_data.location_id == 181
-    indiana = full_data.location_id == 537
-    full_data.loc[madagascar | indiana, 'Hospitalizations'] = np.nan
+    arizona = full_data.location_id == 525
+    full_data.loc[madagascar | arizona, 'Hospitalizations'] = np.nan
     manipulation_metadata['madagascar'] = 'dropped hospitalizations'
-    manipulation_metadata['indiana'] = 'dropped hospitalizations'
+    manipulation_metadata['arizona'] = 'dropped hospitalizations'
+    drop_locs = [
+        172,  # Equatorial Guinea
+        194,  # Lesotho
+    ]
+    full_data = full_data.loc[~full_data.location_id.isin(drop_locs)]
+    manipulation_metadata['equatorial_guinea'] = 'dropped location'
+    manipulation_metadata['lesotho'] = 'dropped location'
     return full_data, manipulation_metadata
 
 
