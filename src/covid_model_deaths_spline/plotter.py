@@ -1,7 +1,10 @@
 from typing import List, Tuple
+from pathlib import Path
+from functools import reduce
 
 import numpy as np
 import pandas as pd
+from matplotlib.backends.backend_pdf import PdfPages
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 import seaborn as sns
@@ -224,3 +227,151 @@ def plotter(df: pd.DataFrame, plot_vars: List[str], draw_df: pd.DataFrame,
         plt.close(fig)
     else:
         plt.show()
+        
+        
+def calc_change(data: pd.DataFrame, plot_cols: List[str]) -> pd.DataFrame:
+    prior_week = data['Date'].astype(str).values[-14] + ' to ' + data['Date'].astype(str).values[-8]
+    last_week = data['Date'].astype(str).values[-7] + ' to ' + data['Date'].astype(str).values[-1]
+    location_name = data['location_name'].unique().item()
+
+    prior_week_data = data.iloc[-14:-7][plot_cols].fillna(0).sum()
+    last_week_data = data.iloc[-7:][plot_cols].fillna(0).sum()
+    chng_data = ((last_week_data - prior_week_data) / prior_week_data) * 100
+    chng_data = chng_data.replace([np.inf, -np.inf], np.nan)
+    chng_data = chng_data.fillna(0)
+    location_id = data['location_id'].unique().item()
+    location_name = data['location_name'].unique().item()
+    
+    data = pd.DataFrame(chng_data).T
+    data['location_id'] = location_id
+    data['location_name'] = location_name
+    
+    return data
+        
+        
+def ratio_plot_helper(data: pd.DataFrame, plot_cols: List[str], pdf):
+    if len(data) >= 14:
+        level_3 = data['level_3'].unique().item()
+        data = data.groupby('location_id').apply(lambda x: calc_change(x, plot_cols)).reset_index(drop=True)
+        data = data.rename(index=str, columns={'Death rate': 'Deaths',
+                                               'Confirmed case rate': 'Cases', 
+                                               'Hospitalization rate': 'Hosp.'})
+        names_dict = dict(zip(data['location_id'], data['location_name']))
+        del data['location_name']
+        data = data.set_index('location_id')
+        location_ids = data.index.values
+        n_locations = location_ids.size
+        
+        if level_3 == 102:
+            map_data = pd.read_csv('../../data/US_graph_map.csv', header=None)
+            plot_labels = pd.read_csv('../../data/US_state_labels.csv')
+            label_dict = dict(zip(plot_labels['location_id'], plot_labels['local_id']))
+            n_rows, n_cols = map_data.shape
+            figsize = (16, 10)
+        else:
+            if n_locations > 2:
+                if n_locations >= 30:
+                    n_cols = 6
+                elif n_locations >= 20:
+                    n_cols = 5
+                elif n_locations >= 12:
+                    n_cols = 4
+                else:
+                    n_cols = 3
+                n_rows = int(np.ceil(n_locations / n_cols))
+                figsize = (16, 10)
+            else:
+                n_cols = n_locations
+                n_rows = 1
+                figsize = (11, 8.5)
+                
+        y_min_max = np.percentile(data.values, (0, 100))
+        y_min = min(0, y_min_max[0] * 1.025)
+        y_max = max(0, y_min_max[1] * 1.025)
+
+        fig = plt.figure(figsize=figsize, constrained_layout=True)
+        gs = fig.add_gridspec(n_rows, n_cols, width_ratios=[1] * n_cols, height_ratios=[1] * n_rows)
+        
+        i = 0
+        for location_id in location_ids:
+            plot_data = data.loc[location_id]
+            plot_name = names_dict[location_id]
+            if level_3 == 102:
+                plot_row, plot_col = np.where(map_data.values == plot_name)
+                plot_name = label_dict[location_id]
+                plot_row = plot_row.item()
+                plot_col = plot_col.item()
+            else:
+                plot_row = int(i / n_cols)
+                plot_col = i % n_cols
+            loc_ax = fig.add_subplot(gs[plot_row, plot_col])
+            loc_ax.bar(plot_data.index, 0, color='black', alpha=0)
+            loc_ax.bar(plot_data[plot_data >= 0].index, 
+                       plot_data[plot_data >= 0].values,
+                       color='indianred', edgecolor='maroon', alpha=0.75)
+            loc_ax.bar(plot_data[plot_data < 0].index, 
+                       plot_data[plot_data < 0].values,
+                       color='dodgerblue', edgecolor='navy', alpha=0.75)
+            loc_ax.axhline(0, linestyle='--', alpha=0.75, color='black')
+            loc_ax.set_ylim(y_min, y_max)
+            if plot_col == 0:
+                loc_ax.set_ylabel('% change', fontsize=12)
+            else:
+                loc_ax.get_yaxis().set_visible(False)
+            if plot_row == n_rows - 1:
+                loc_ax.tick_params(axis='x', labelsize=12, labelrotation=60)
+            else:
+                loc_ax.get_xaxis().set_visible(False)
+            if np.max(np.abs(plot_data)) < 10:
+                loc_ax.set_ylim(-10, 10)
+            if level_3 == 102:
+                loc_ax.text(0.875, 0.875, plot_name, ha='center', va='center', 
+                            transform=loc_ax.transAxes)
+            else:
+                loc_ax.set_title(plot_name)
+            i += 1
+        
+        fig.tight_layout()
+        pdf.savefig()
+        plt.close(fig)
+        
+        
+def agg_to_level_3(data: pd.DataFrame, agg_hierarchy: pd.DataFrame, plot_cols: List[str]) -> pd.DataFrame:
+    agg_out = (data['level_4'].notnull()) & (data['location_id'] != data['level_4'])
+    agg_data = data.loc[agg_out]
+    agg_data['location_id'] = agg_data['level_4'].astype(int)
+    del agg_data['location_name']
+    agg_data = agg_data.merge(agg_hierarchy[['location_id', 'location_name']])
+    
+    agg_data[plot_cols] = agg_data[plot_cols].values * agg_data[['population']].values
+    agg_cols = plot_cols + ['population']
+    id_cols = [col for col in data.columns if col not in agg_cols]
+    agg_data = agg_data.groupby(id_cols, as_index=False)[agg_cols].sum()
+    agg_data['population'] = agg_data.groupby('location_id')['population'].transform(max)
+    agg_data[plot_cols] = agg_data[plot_cols].values / agg_data[['population']].values
+    
+    data = data.loc[~agg_out].append(agg_data)
+    
+    return data
+
+        
+def ratio_plot(data_list: List[pd.DataFrame], hierarchy: pd.DataFrame, agg_hierarchy: pd.DataFrame, output_root: Path):
+    data = reduce(lambda x, y: pd.merge(x,
+                                        y.rename(index=str, columns={'True date':'Date'}),
+                                        how='left'),
+                  data_list)
+    plot_cols = [col for col in data.columns if col not in ['location_id', 'Date', 'population']]
+    hierarchy = hierarchy.copy()
+    hierarchy['level_3'] = hierarchy['path_to_top_parent'].apply(lambda x: int(x.split(',')[3]))
+    hierarchy['level_4'] = hierarchy['path_to_top_parent'].apply(lambda x: int(x.split(',')[4]) if len(x.split(',')) >= 5 else np.nan)
+    hierarchy['sort_order'] = hierarchy.groupby('level_3')['sort_order'].transform(min)
+    data = data.merge(hierarchy[['location_id', 'location_name', 'level_3', 'level_4', 'sort_order']])
+    data = data.sort_values(['location_id', 'Date']).reset_index(drop=True)
+    data[plot_cols] = np.vstack(data.groupby('location_id')
+                                .apply(lambda x: np.diff(x[plot_cols], axis=0, prepend=0)).values)
+    data = agg_to_level_3(data, agg_hierarchy, plot_cols)
+    data = data.sort_values(['sort_order', 'location_id', 'Date']).reset_index(drop=True)
+    
+    with PdfPages(output_root / 'last_week_change.pdf') as pdf:
+        data.groupby('sort_order').apply(lambda x: ratio_plot_helper(x, plot_cols, pdf))
+    

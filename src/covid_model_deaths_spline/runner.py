@@ -8,7 +8,7 @@ import pandas as pd
 import yaml
 from collections import namedtuple
 
-from covid_model_deaths_spline import data, models, pdf_merger, cluster, summarize, aggregate
+from covid_model_deaths_spline import data, models, pdf_merger, cluster, summarize, aggregate, plotter
 
 warnings.simplefilter('ignore')
 
@@ -37,7 +37,7 @@ def make_deaths(app_metadata: cli_tools.Metadata, input_root: Path, output_root:
     hosp_data = data.get_shifted_data(full_data, 'Hospitalizations', 'Hospitalization rate')
     death_data = data.get_death_data(full_data)
     pop_data = data.get_population_data(input_root, hierarchy)
-
+    
     logger.debug(f"Dropping {holdout_days} days from the end of the data.")
     case_data = data.holdout_days(case_data, holdout_days)
     hosp_data = data.holdout_days(hosp_data, holdout_days)
@@ -48,6 +48,17 @@ def make_deaths(app_metadata: cli_tools.Metadata, input_root: Path, output_root:
     hosp_data, missing_hosp = data.filter_data_by_location(hosp_data, hierarchy, 'hospitalizations')
     death_data, missing_deaths = data.filter_data_by_location(death_data, hierarchy, 'deaths')
     pop_data, missing_pop = data.filter_data_by_location(pop_data, hierarchy, 'population')
+    
+    logger.debug("Making plots of change in data over last week.")
+    plotter.ratio_plot(
+        [death_data[['location_id', 'Date', 'Death rate']].copy(),
+         case_data[['location_id', 'True date', 'Confirmed case rate']].copy(),
+         hosp_data[['location_id', 'True date', 'Hospitalization rate']].copy(),
+         pop_data[['location_id', 'population']]],
+        hierarchy,
+        agg_hierarchy,
+        output_root
+    )
 
     logger.debug("Combine datasets.")
     model_data = data.combine_data(case_data, hosp_data, death_data, pop_data, hierarchy)
