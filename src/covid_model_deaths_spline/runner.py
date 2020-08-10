@@ -33,24 +33,27 @@ def make_deaths(app_metadata: cli_tools.Metadata, input_root: Path, output_root:
     full_data, manipulation_metadata = data.evil_doings(full_data)
     app_metadata.update({'data_manipulation': manipulation_metadata})
 
-    case_data = data.get_shifted_data(full_data, 'Confirmed', 'Confirmed case rate')
-    hosp_data = data.get_shifted_data(full_data, 'Hospitalizations', 'Hospitalization rate')
+    case_data = data.get_shifted_data(full_data, 'Confirmed', 'Confirmed case rate', shift_size=8)
+    hosp_data = data.get_shifted_data(full_data, 'Hospitalizations', 'Hospitalization rate', shift_size=8)
+    hospbd_data = data.get_shifted_data(full_data, 'Hosp. bed-days', 'Hosp. bed-day rate', shift_size=4)
     death_data = data.get_death_data(full_data)
     pop_data = data.get_population_data(input_root, hierarchy)
 
     logger.debug(f"Dropping {holdout_days} days from the end of the data.")
     case_data = data.holdout_days(case_data, holdout_days)
     hosp_data = data.holdout_days(hosp_data, holdout_days)
+    hospbd_data = data.holdout_days(hospbd_data, holdout_days)
     death_data = data.holdout_days(death_data, holdout_days)
 
     logger.debug("Filtering data by location.")
     case_data, missing_cases = data.filter_data_by_location(case_data, hierarchy, 'cases')
     hosp_data, missing_hosp = data.filter_data_by_location(hosp_data, hierarchy, 'hospitalizations')
+    hospbd_data, missing_hospbd = data.filter_data_by_location(hospbd_data, hierarchy, 'hosp. bed-days')
     death_data, missing_deaths = data.filter_data_by_location(death_data, hierarchy, 'deaths')
     pop_data, missing_pop = data.filter_data_by_location(pop_data, hierarchy, 'population')
 
     logger.debug("Combine datasets.")
-    model_data = data.combine_data(case_data, hosp_data, death_data, pop_data, hierarchy)
+    model_data = data.combine_data(case_data, hosp_data, hospbd_data, death_data, pop_data, hierarchy)
     model_data = model_data.sort_values(['location_id', 'Date']).reset_index(drop=True)
 
     logger.debug("Create aggregates for modeling.")
@@ -58,13 +61,13 @@ def make_deaths(app_metadata: cli_tools.Metadata, input_root: Path, output_root:
                      zip(agg_hierarchy['location_id'], agg_hierarchy['location_name'])]
     agg_model_data = aggregate.compute_location_aggregates_data(
         model_data, hierarchy, agg_locations,
-        ['Confirmed case rate', 'Hospitalization rate', 'Death rate']
+        ['Confirmed case rate', 'Hospitalization rate', 'Hosp. bed-day rate', 'Death rate']
     )
     model_data = model_data.append(agg_model_data)
     model_data = model_data.sort_values(['location_id', 'Date']).reset_index(drop=True)
 
     logger.debug("Filter cases/hospitalizations based on threshold.")
-    model_data, dropped_locations, no_cases_locs, no_hosp_locs = data.filter_to_epi_threshold(
+    model_data, dropped_locations, no_cases_locs, no_hosp_locs, no_hospbd_locs = data.filter_to_epi_threshold(
         hierarchy, model_data, death_threshold=5, epi_threshold=10
     )
     app_metadata.update({'dropped_locations': dropped_locations})
@@ -82,13 +85,22 @@ def make_deaths(app_metadata: cli_tools.Metadata, input_root: Path, output_root:
                     'model_type': 'HFR'}
     hfr_settings.update(s1_settings)
     model_settings.update({'HFR': hfr_settings})
+    hbdfr_settings = {'spline_var': 'Hosp. bed-day rate',
+                      'model_type': 'HbdFR'}
+    hbdfr_settings.update(s1_settings)
+    model_settings.update({'HbdFR': hbdfr_settings})
     smoother_settings = {'obs_var': 'Death rate',
-                         'pred_vars': ['Predicted death rate (CFR)', 'Predicted death rate (HFR)'],
-                         'spline_vars': ['Confirmed case rate', 'Hospitalization rate'],
+                         'pred_vars': ['Predicted death rate (CFR)',
+                                       'Predicted death rate (HFR)',
+                                       'Predicted death rate (HbdFR)'],
+                         'spline_vars': ['Confirmed case rate',
+                                         'Hospitalization rate',
+                                         'Hosp. bed-day rate'],
                          'spline_settings_dir': str(spline_settings_dir)}
     model_settings.update({'smoother':smoother_settings})
     model_settings['no_cases_locs'] = no_cases_locs
     model_settings['no_hosp_locs'] = no_hosp_locs
+    model_settings['no_hospbd_locs'] = no_hospbd_locs
 
     logger.debug("Launching models by location.")
     working_dir = output_root / 'model_working_dir'

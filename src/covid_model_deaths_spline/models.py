@@ -36,7 +36,7 @@ def model_iteration(location_id: int, model_data: pd.DataFrame, model_settings: 
     print(dow_holdout)
     model_data = model_data.copy()
     deaths_indicator = 'Death rate'
-    indicators = ['Confirmed case rate', 'Hospitalization rate']
+    indicators = ['Confirmed case rate', 'Hospitalization rate', 'Hosp. bed-day rate']
     for indicator in indicators + [deaths_indicator]:
         model_data[indicator] = drop_days_by_indicator(
             model_data[indicator].values.copy(), model_data[deaths_indicator].values.copy(), 
@@ -55,6 +55,10 @@ def model_iteration(location_id: int, model_data: pd.DataFrame, model_settings: 
         hfr_model_data = cfr_model.cfr_model(model_data, dow_holdout=dow_holdout, **model_settings['HFR'])
         model_data_list += [hfr_model_data.loc[:, ['location_id', 'Date',
                                                    'Hospitalization rate', 'Predicted death rate (HFR)']]]
+    if location_id not in model_settings['no_hospbd_locs']:
+        hbdfr_model_data = cfr_model.cfr_model(model_data, dow_holdout=dow_holdout, **model_settings['HbdFR'])
+        model_data_list += [hbdfr_model_data.loc[:, ['location_id', 'Date',
+                                                     'Hosp. bed-day rate', 'Predicted death rate (HbdFR)']]]
     
     # combine outputs
     model_data = functools.reduce(
@@ -62,8 +66,10 @@ def model_iteration(location_id: int, model_data: pd.DataFrame, model_settings: 
         model_data_list
     )
     keep_cols = ['location_id', 'location_name', 'Date', 
-                 'Confirmed case rate', 'Hospitalization rate', 'Death rate', 
-                 'Predicted death rate (CFR)', 'Predicted death rate (HFR)', 'population']
+                 'Confirmed case rate', 'Hospitalization rate', 'Hosp. bed-day rate',
+                 'Death rate', 
+                 'Predicted death rate (CFR)', 'Predicted death rate (HFR)', 'Predicted death rate (HbdFR)',
+                 'population']
     for col in keep_cols:
         if col not in model_data.columns:
             model_data[col] = np.nan
@@ -134,6 +140,11 @@ def run_models(location_id: int, data_path: str, settings_path: str,
     model_data = results[0].model_data
     noisy_draws = functools.reduce(lambda x, y: pd.merge(x, y, how='outer'), noisy_draws)
     smooth_draws = functools.reduce(lambda x, y: pd.merge(x, y, how='outer'), smooth_draws)
+    
+    ## IS THIS WHAT WE WANT TO DO? OR FLAG ENTIRE MODEL AS PROBLEMATIC?
+    # # drop any days where we don't have all draws
+    # missing_draws = smooth_draws[[f'draw_{d}' for d in range(n_draws)]].isnull().any(axis=1)
+    # smooth_draws = smooth_draws.loc[~missing_draws]
     
     # plot
     draw_ranges = np.cumsum(iteration_n_draws)
