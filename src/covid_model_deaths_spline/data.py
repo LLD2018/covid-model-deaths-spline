@@ -40,6 +40,17 @@ def load_aggregate_locations(inputs_root: Path) -> pd.DataFrame:
     return hierarchy.loc[aggregate & not_global, keep_columns].sort_values('sort_order').reset_index(drop=True)
 
 
+def load_bed_days(inputs_root: Path) -> pd.DataFrame:
+    bd_data_path = inputs_root / 'raw_formatted' / 'extracted_population_hospitalizations.csv'
+    data = pd.read_csv(bd_data_path)
+    data['Date'] = pd.to_datetime(data['Date'])
+    data = data.sort_values(['location_id', 'Date']).reset_index(drop=True)
+    data['Hosp. bed-days'] = data.groupby('location_id')['Hospitalizations'].cumsum()
+    data = data[['location_id', 'Date', 'Hosp. bed-days']]
+    
+    return data
+
+
 def load_full_data(inputs_root: Path) -> pd.DataFrame:
     """Gets all death, case, and population data."""
     full_data_path = inputs_root / 'use_at_your_own_risk' / 'full_data_extra_hospital.csv'
