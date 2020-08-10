@@ -50,6 +50,7 @@ def plotter(df: pd.DataFrame, plot_vars: List[str], draw_df: pd.DataFrame,
     raw_lines = {'color':'navy', 'alpha':0.5, 'linewidth':3}
     cfr_lines = {'color':'forestgreen', 'alpha':0.5, 'linewidth':3}
     hfr_lines = {'color':'darkorchid', 'alpha':0.5, 'linewidth':3}
+    hbdfr_lines = {'color':'darkorange', 'alpha':0.5, 'linewidth':3}
     smoothed_pred_lines = {'color':'firebrick', 'alpha':0.75, 'linewidth':3}
     smoothed_pred_area = {'color':'firebrick', 'alpha':0.25}
 
@@ -82,7 +83,23 @@ def plotter(df: pd.DataFrame, plot_vars: List[str], draw_df: pd.DataFrame,
         ax_hfr.plot(df['Hospitalization rate'],
                     df['Smoothed predicted death rate'],
                     **smoothed_pred_lines)
-        ax_hfr.set_xlabel('Cumulative hospitalization rate', fontsize=14)
+        ax_hfr.set_xlabel('Cumulative hospital admission rate', fontsize=14)
+        ax_hfr.set_ylabel('Cumulative death rate', fontsize=14)
+        indep_idx += 1
+        
+    # hospitalizations (bed-days)
+    if 'Hosp. bed-day rate' in plot_vars:
+        ax_hfr = fig.add_subplot(gs[0, indep_idx])
+        ax_hfr.scatter(df['Hosp. bed-day rate'],
+                       df['Death rate'],
+                       **raw_points)
+        ax_hfr.plot(df['Hosp. bed-day rate'],
+                    df['Predicted death rate (HbdFR)'],
+                    **hbdfr_lines)
+        ax_hfr.plot(df['Hosp. bed-day rate'],
+                    df['Smoothed predicted death rate'],
+                    **smoothed_pred_lines)
+        ax_hfr.set_xlabel('Cumulative hospital bed-days rate', fontsize=14)
         ax_hfr.set_ylabel('Cumulative death rate', fontsize=14)
         
     for i, smooth_variable in enumerate(plot_vars):
@@ -122,6 +139,8 @@ def plotter(df: pd.DataFrame, plot_vars: List[str], draw_df: pd.DataFrame,
                   **cfr_lines)
     ax_cumul.plot(df['Date'], df['Predicted death rate (HFR)'] * df['population'],
                   **hfr_lines)
+    ax_cumul.plot(df['Date'], df['Predicted death rate (HbdFR)'] * df['population'],
+                  **hbdfr_lines)
     ax_cumul.plot(df['Date'],
                   df['Smoothed predicted death rate'] * df['population'],
                   **smoothed_pred_lines)
@@ -140,6 +159,9 @@ def plotter(df: pd.DataFrame, plot_vars: List[str], draw_df: pd.DataFrame,
     ax_daily.plot(df['Date'],
                   np.diff(df['Predicted death rate (HFR)'], prepend=0) * df['population'],
                   **hfr_lines)
+    ax_daily.plot(df['Date'],
+                  np.diff(df['Predicted death rate (HbdFR)'], prepend=0) * df['population'],
+                  **hbdfr_lines)
     ax_daily.plot(df['Date'],
                   df['Smoothed predicted daily death rate'] * df['population'],
                   **smoothed_pred_lines)
@@ -163,7 +185,8 @@ def plotter(df: pd.DataFrame, plot_vars: List[str], draw_df: pd.DataFrame,
     # format model inputs
     df = df.copy()
     
-    for input_var in ['Death rate', 'Predicted death rate (CFR)', 'Predicted death rate (HFR)']:
+    for input_var in ['Death rate', 'Predicted death rate (CFR)',
+                      'Predicted death rate (HFR)', 'Predicted death rate (HbdFR)']:
         df[input_var][1:] = np.diff(df[input_var])
         df.loc[df[input_var] < floor, input_var] = floor
     
@@ -208,6 +231,9 @@ def plotter(df: pd.DataFrame, plot_vars: List[str], draw_df: pd.DataFrame,
     ax_draws.plot(df['Date'],
                   np.log(df['Predicted death rate (HFR)']),
                   **hfr_lines)
+    ax_draws.plot(df['Date'],
+                  np.log(df['Predicted death rate (HbdFR)']),
+                  **hbdfr_lines)
     ##
     
     location_name = df.loc[~df['location_name'].isnull(), 'location_name'].values

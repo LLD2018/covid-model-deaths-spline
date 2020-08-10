@@ -41,8 +41,10 @@ def compute_location_aggregates_draws(df: pd.DataFrame, hierarchy: pd.DataFrame,
 
 
 def compute_location_aggregates_data(df: pd.DataFrame, hierarchy: pd.DataFrame, aggregates: List[Location],
-                                     rate_cols: List[str] = ['Confirmed case rate', 'Death rate', 'Predicted death rate (CFR)',
-                                                             'Hospitalization rate', 'Predicted death rate (HFR)']) -> pd.DataFrame:
+                                     rate_cols: List[str] = ['Death rate',
+                                                             'Confirmed case rate', 'Predicted death rate (CFR)',
+                                                             'Hospitalization rate', 'Predicted death rate (HFR)',
+                                                             'Hosp. bed-day rate', 'Predicted death rate (HbdFR)']) -> pd.DataFrame:
     """
     Aggregate draws by parent location and Date. We assume here that model data
     columns are in rate space , and that the child locations in the draws are

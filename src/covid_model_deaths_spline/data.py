@@ -156,7 +156,7 @@ def combine_data(case_data: pd.DataFrame,
     df = functools.reduce(lambda x, y: pd.merge(x, y, how='outer'),
                           [case_data.loc[:, ['location_id', 'Date', 'Confirmed case rate']],
                            hosp_data.loc[:, ['location_id', 'Date', 'Hospitalization rate']],
-                           hospbd_data.loc[:, ['location_id', 'Date', 'Hosp. bed-days']],
+                           hospbd_data.loc[:, ['location_id', 'Date', 'Hosp. bed-day rate']],
                            death_data.loc[:, ['location_id', 'Date', 'Death rate']],
                            pop_data.loc[:, ['location_id', 'population']]])
     df = hierarchy[['location_id', 'location_name']].merge(df)
