@@ -335,6 +335,8 @@ def ratio_plot_helper(data: pd.DataFrame, plot_cols: List[str], pdf):
         pdf.savefig()
         plt.close(fig)
         
+        return data
+        
         
 def agg_to_level_3(data: pd.DataFrame, agg_hierarchy: pd.DataFrame, plot_cols: List[str]) -> pd.DataFrame:
     agg_out = (data['level_4'].notnull()) & (data['location_id'] != data['level_4'])
@@ -373,5 +375,6 @@ def ratio_plot(data_list: List[pd.DataFrame], hierarchy: pd.DataFrame, agg_hiera
     data = data.sort_values(['sort_order', 'location_id', 'Date']).reset_index(drop=True)
     
     with PdfPages(output_root / 'last_week_change.pdf') as pdf:
-        data.groupby('sort_order').apply(lambda x: ratio_plot_helper(x, plot_cols, pdf))
+        data = data.groupby('sort_order').apply(lambda x: ratio_plot_helper(x, plot_cols, pdf)).reset_index()
+    data.to_csv(output_root / 'last_week_change.csv', index=False)
     
