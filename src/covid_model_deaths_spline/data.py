@@ -57,8 +57,11 @@ def load_full_data(inputs_root: Path) -> pd.DataFrame:
     data = pd.read_csv(full_data_path)
     data['Date'] = pd.to_datetime(data['Date'])
     data['location_id'] = data['location_id'].astype(int)
+    bd_data = load_bed_days(inputs_root)
+    data = data.merge(bd_data, how='left')
 
-    keep_columns = ['location_id', 'Date', 'Deaths', 'Confirmed', 'Hospitalizations', 'Death rate', 'population']
+    keep_columns = ['location_id', 'Date', 'Deaths', 'Confirmed', 'Hospitalizations', 'Hosp. bed-days',
+                    'Death rate', 'population']
     sort_columns = ['location_id', 'Date']
     data = data.loc[:, keep_columns].sort_values(sort_columns).reset_index(drop=True)
     return data
@@ -146,12 +149,14 @@ def filter_data_by_location(data: pd.DataFrame, hierarchy: pd.DataFrame,
 
 def combine_data(case_data: pd.DataFrame,
                  hosp_data: pd.DataFrame,
+                 hospbd_data: pd.DataFrame,
                  death_data: pd.DataFrame,
                  pop_data: pd.DataFrame, hierarchy: pd.DataFrame) -> pd.DataFrame:
     """Merge all data into a single model data set."""
     df = functools.reduce(lambda x, y: pd.merge(x, y, how='outer'),
                           [case_data.loc[:, ['location_id', 'Date', 'Confirmed case rate']],
                            hosp_data.loc[:, ['location_id', 'Date', 'Hospitalization rate']],
+                           hospbd_data.loc[:, ['location_id', 'Date', 'Hosp. bed-days']],
                            death_data.loc[:, ['location_id', 'Date', 'Death rate']],
                            pop_data.loc[:, ['location_id', 'population']]])
     df = hierarchy[['location_id', 'location_name']].merge(df)
@@ -191,6 +196,10 @@ def filter_to_epi_threshold(hierarchy: pd.DataFrame,
 
     df = check_counts(df, 'Hospitalization rate', 'fill_na', epi_threshold)
     days_w_hosp = df['Hospitalization rate'].notnull().groupby(df['location_id']).sum()
+    no_hosp_locs = days_w_hosp[days_w_hosp == 0].index.to_list()
+    
+    df = check_counts(df, 'Hosp. bed-days', 'fill_na', epi_threshold)
+    days_w_hosp = df['Hosp. bed-days'].notnull().groupby(df['location_id']).sum()
     no_hosp_locs = days_w_hosp[days_w_hosp == 0].index.to_list()
 
     df = check_counts(df, 'Death rate', 'drop', death_threshold)
