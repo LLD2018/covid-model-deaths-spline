@@ -198,9 +198,9 @@ def filter_to_epi_threshold(hierarchy: pd.DataFrame,
     days_w_hosp = df['Hospitalization rate'].notnull().groupby(df['location_id']).sum()
     no_hosp_locs = days_w_hosp[days_w_hosp == 0].index.to_list()
     
-    df = check_counts(df, 'Hosp. bed-days', 'fill_na', epi_threshold)
-    days_w_hosp = df['Hosp. bed-days'].notnull().groupby(df['location_id']).sum()
-    no_hosp_locs = days_w_hosp[days_w_hosp == 0].index.to_list()
+    df = check_counts(df, 'Hosp. bed-day rate', 'fill_na', epi_threshold)
+    days_w_hospbd = df['Hosp. bed-day rate'].notnull().groupby(df['location_id']).sum()
+    no_hospbd_locs = days_w_hospbd[days_w_hospbd == 0].index.to_list()
 
     df = check_counts(df, 'Death rate', 'drop', death_threshold)
     dropped_locations = set(hierarchy['location_id']).difference(df['location_id'])
@@ -208,7 +208,7 @@ def filter_to_epi_threshold(hierarchy: pd.DataFrame,
     if dropped_locations:
         logger.warning(f"Dropped {sorted(list(dropped_locations))} from data due to lack of deaths.")
 
-    return df, dropped_locations, no_cases_locs, no_hosp_locs
+    return df, dropped_locations, no_cases_locs, no_hosp_locs, no_hospbd_locs
 
 
 def fill_dates(df: pd.DataFrame, interp_var: str = None) -> pd.DataFrame:
