@@ -43,9 +43,11 @@ def load_aggregate_locations(inputs_root: Path) -> pd.DataFrame:
 def load_bed_days(inputs_root: Path) -> pd.DataFrame:
     bd_data_path = inputs_root / 'raw_formatted' / 'extracted_population_hospitalizations.csv'
     data = pd.read_csv(bd_data_path)
-    data['Date'] = pd.to_datetime(data['Date'])
+    data['Date'] = pd.to_datetime(data['date'])
+    logger.debug("Dropping Norway data from hospital population data (duplicate values).")
+    data = data.loc[data['location_id'] != 90]
     data = data.sort_values(['location_id', 'Date']).reset_index(drop=True)
-    data['Hosp. bed-days'] = data.groupby('location_id')['Hospitalizations'].cumsum()
+    data['Hosp. bed-days'] = data.groupby('location_id')['value'].cumsum()
     data = data[['location_id', 'Date', 'Hosp. bed-days']]
     
     return data
