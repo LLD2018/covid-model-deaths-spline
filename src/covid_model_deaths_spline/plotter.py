@@ -229,14 +229,17 @@ def plotter(df: pd.DataFrame, plot_vars: List[str], draw_df: pd.DataFrame,
         plt.show()
         
         
-def calc_change(data: pd.DataFrame, plot_cols: List[str]) -> pd.DataFrame:
+def calc_change(data: pd.DataFrame, plot_cols: List[str], metric: str) -> pd.DataFrame:
     prior_week = data['Date'].astype(str).values[-14] + ' to ' + data['Date'].astype(str).values[-8]
     last_week = data['Date'].astype(str).values[-7] + ' to ' + data['Date'].astype(str).values[-1]
     location_name = data['location_name'].unique().item()
 
     prior_week_data = data.iloc[-14:-7][plot_cols].sum()  # skipna=False
     last_week_data = data.iloc[-7:][plot_cols].sum()  # skipna=False
-    chng_data = ((last_week_data - prior_week_data) / prior_week_data) * 100
+    if metric == 'delta':
+        chng_data = last_week_data - prior_week_data
+    elif metric == 'pct_change':
+        chng_data = ((last_week_data - prior_week_data) / prior_week_data) * 100
     chng_data = chng_data.replace([np.inf, -np.inf], np.nan)
     chng_data = chng_data.fillna(0)
     location_id = data['location_id'].unique().item()
@@ -249,13 +252,23 @@ def calc_change(data: pd.DataFrame, plot_cols: List[str]) -> pd.DataFrame:
     return data
         
         
-def ratio_plot_helper(data: pd.DataFrame, plot_cols: List[str], pdf):
+def ratio_plot_helper(data: pd.DataFrame, plot_cols: List[str], pdf, metric: str = 'delta'):
     if len(data) >= 14:
         level_3 = data['level_3'].unique().item()
-        data = data.groupby('location_id').apply(lambda x: calc_change(x, plot_cols)).reset_index(drop=True)
+        data = (data.groupby('location_id').apply(lambda x: calc_change(x, plot_cols, metric))
+                .reset_index(drop=True))
+        if metric == 'delta':
+            data[plot_cols] *= 1e6
         data = data.rename(index=str, columns={'Death rate': 'Deaths',
                                                'Confirmed case rate': 'Cases', 
                                                'Hospitalization rate': 'Hosp.'})
+        if metric == 'delta':
+            data['Cases'] *= 1 / 100
+            data['Hosp.'] *= 1 / 10
+            data = data.rename(index=str, columns={'Cases': 'Cases (* 1/100)', 
+                                                   'Hosp.': 'Hosp. (* 1/10)'})
+
+        
         names_dict = dict(zip(data['location_id'], data['location_name']))
         del data['location_name']
         data = data.set_index('location_id')
@@ -313,17 +326,23 @@ def ratio_plot_helper(data: pd.DataFrame, plot_cols: List[str], pdf):
                        plot_data[plot_data < 0].values,
                        color='dodgerblue', edgecolor='navy', alpha=0.75)
             loc_ax.axhline(0, linestyle='--', alpha=0.75, color='black')
-            loc_ax.set_ylim(y_min, y_max)
+            if np.max(np.abs(data.values)) < 0.25 and metric == 'delta':
+                loc_ax.set_ylim(-0.25, 0.25)
+            elif np.max(np.abs(data.values)) < 10 and metric == 'pct_change':
+                loc_ax.set_ylim(-10, 10)
+            else:
+                loc_ax.set_ylim(y_min, y_max)
             if plot_col == 0:
-                loc_ax.set_ylabel('% change', fontsize=12)
+                if metric == 'delta':
+                    loc_ax.set_ylabel('Change (per 1M)', fontsize=12)
+                elif metric == 'pct_change':
+                    loc_ax.set_ylabel('% change', fontsize=12)
             else:
                 loc_ax.get_yaxis().set_visible(False)
             if plot_row == n_rows - 1:
                 loc_ax.tick_params(axis='x', labelsize=12, labelrotation=60)
             else:
                 loc_ax.get_xaxis().set_visible(False)
-            if np.max(np.abs(plot_data)) < 10:
-                loc_ax.set_ylim(-10, 10)
             if level_3 == 102:
                 loc_ax.text(0.875, 0.875, plot_name, ha='center', va='center', 
                             transform=loc_ax.transAxes)
