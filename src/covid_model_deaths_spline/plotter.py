@@ -234,8 +234,8 @@ def calc_change(data: pd.DataFrame, plot_cols: List[str], metric: str) -> pd.Dat
     last_week = data['Date'].astype(str).values[-7] + ' to ' + data['Date'].astype(str).values[-1]
     location_name = data['location_name'].unique().item()
 
-    prior_week_data = data.iloc[-14:-7][plot_cols].sum()  # skipna=False
-    last_week_data = data.iloc[-7:][plot_cols].sum()  # skipna=False
+    prior_week_data = data.iloc[-14:-7][plot_cols].mean() * 7  # skipna=False
+    last_week_data = data.iloc[-7:][plot_cols].mean() * 7  # skipna=False
     if metric == 'delta':
         chng_data = last_week_data - prior_week_data
     elif metric == 'pct_change':

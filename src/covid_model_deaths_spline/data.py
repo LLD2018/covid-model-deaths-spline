@@ -9,6 +9,19 @@ import numpy as np
 
 def evil_doings(full_data: pd.DataFrame) -> Tuple[pd.DataFrame, Dict]:
     manipulation_metadata = {}
+    madagascar = full_data.location_id == 181
+    arizona = full_data.location_id == 525
+    full_data.loc[madagascar | arizona, 'Hospitalizations'] = np.nan
+    manipulation_metadata['madagascar'] = 'dropped hospitalizations'
+    manipulation_metadata['arizona'] = 'dropped hospitalizations'
+    drop_locs = [
+        172,  # Equatorial Guinea
+        194,  # Lesotho
+    ]
+    full_data = full_data.loc[~full_data.location_id.isin(drop_locs)]
+    manipulation_metadata['equatorial_guinea'] = 'dropped location'
+    manipulation_metadata['lesotho'] = 'dropped location'
+    
     return full_data, manipulation_metadata
 
 
@@ -52,17 +65,21 @@ def get_shifted_data(full_data: pd.DataFrame, count_var: str, rate_var: str, shi
     """Filter and clean case data and shift into the future."""
     data = full_data.loc[:, ['location_id', 'Date', count_var, 'population']]
     data[rate_var] = data[count_var] / data['population']
-    data['True date'] = data['Date']
-    data['Date'] = data['Date'].apply(lambda x: x + pd.Timedelta(days=shift_size))
 
     non_na = ~data[rate_var].isnull()
     has_data = data.groupby('location_id')[rate_var].transform(max).astype(bool)
-    keep_columns = ['location_id', 'True date', 'Date', rate_var]
+    keep_columns = ['location_id', 'Date', rate_var]
     data = data.loc[non_na & has_data, keep_columns].reset_index(drop=True)
 
     data = (data.groupby('location_id', as_index=False)
             .apply(lambda x: fill_dates(x, rate_var))
             .reset_index(drop=True))
+    
+    data['True date'] = data['Date']
+    data['Date'] = data['Date'].apply(lambda x: x + pd.Timedelta(days=shift_size))
+    
+    keep_columns = ['location_id', 'True date', 'Date', rate_var]
+    data = data.loc[:, keep_columns].reset_index(drop=True)
 
     return data
 
